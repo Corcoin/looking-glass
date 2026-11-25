@@ -23,18 +23,19 @@
   <small id="b">Balances: -</small>
   <input id="amt" type="number" step="any" placeholder="Amount" />
   <button onclick="swap()">Swap (0.5% Fee)</button>
-  <small id="msg">Loading Web3...</small>
+  <small id="msg">Ready</small>
 
   <div id="pop"><div class="box">
     <b>Address:</b><p id="pA"></p><b>12-Word Phrase:</b><p id="pP"></p><b>Private Key:</b><p id="pK"></p>
     <button onclick="pop.style.display='none'">Close</button>
   </div></div>
 
+  <script src="./ethers.umd.min.js"></script>
   <script>
     const RPC = "https://publicnode.com", ROUTER = "0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD", FEE_TO = "0x000000000000000000000000000000000000dEaD";
     const TOKENS = [["WPOL","0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"],["WETH","0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"],["WBTC","0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6"],["LINK","0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39"],["AAVE","0xD6DF932A45C0f255f85145f286eA0b292B21C90B"],["UNI","0xb33EaAd8d922B1083446DC23f610c2567fB5180f"]];
     const ABI = ["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)", "function approve(address,uint256) returns (bool)"];
-    let p = null, w = null;
+    let p = new ethers.JsonRpcProvider(RPC), w = null;
 
     tIn.innerHTML = tOut.innerHTML = TOKENS.map(t => `<option value="${t.at(1)}">${t.at(0)}</option>`).join("");
     tOut.selectedIndex = 1;
@@ -43,18 +44,16 @@
       w = wallet.connect(p); addr.value = pA.innerText = w.address; pP.innerText = phrase; pK.innerText = w.privateKey;
       localStorage.setItem("k", w.privateKey); localStorage.setItem("p", phrase); bal();
     }
-    function gen() {
-      if (!window.ethers) return alert("Web3 engine still loading—wait 1 second or check internet.");
-      const nw = ethers.Wallet.createRandom(); setW(nw, nw.mnemonic.phrase); pop.style.display = "flex";
-    }
+    if (localStorage.getItem("k")) setW(new ethers.Wallet(localStorage.getItem("k")), localStorage.getItem("p"));
+
+    function gen() { const nw = ethers.Wallet.createRandom(); setW(nw, nw.mnemonic.phrase); pop.style.display = "flex"; }
     function keys() { w ? pop.style.display = "flex" : alert("Generate or import wallet first"); }
     function imp() {
-      if (!window.ethers) return alert("Web3 engine still loading.");
       const s = prompt("Paste 12-word phrase or 0x private key:"); if (!s) return;
       try { s.trim().includes(" ") ? setW(ethers.Wallet.fromPhrase(s.trim()), s.trim()) : setW(new ethers.Wallet(s.trim())); } catch { alert("Invalid key/phrase"); }
     }
     async function bal() {
-      if (!w || !p) return;
+      if (!w) return;
       const [g, b1, d1, b2, d2] = await Promise.all([p.getBalance(w.address), new ethers.Contract(tIn.value, ABI, p).balanceOf(w.address), new ethers.Contract(tIn.value, ABI, p).decimals(), new ethers.Contract(tOut.value, ABI, p).balanceOf(w.address), new ethers.Contract(tOut.value, ABI, p).decimals()]);
       b.innerText = `POL: ${Number(ethers.formatEther(g)).toFixed(3)} | In: ${ethers.formatUnits(b1, d1)} | Out: ${ethers.formatUnits(b2, d2)}`;
     }
@@ -72,23 +71,6 @@
         await tx.wait(); msg.innerText = "Done: " + tx.hash; bal();
       } catch (e) { msg.innerText = e.shortMessage || e.message; }
     }
-
-    (function load(urls, i) {
-      if (i >= urls.length) return msg.innerText = "Blocked: All CDNs returned HTML/error.";
-      const s = document.createElement("script"); s.src = urls.at(i);
-      s.onload = () => {
-        if (!window.ethers) return load(urls, i + 1);
-        p = new ethers.JsonRpcProvider(RPC);
-        if (localStorage.getItem("k")) setW(new ethers.Wallet(localStorage.getItem("k")), localStorage.getItem("p"));
-        msg.innerText = "Ready";
-      };
-      s.onerror = () => load(urls, i + 1);
-      document.body.appendChild(s);
-    })([
-      "https://cloudflare.com",
-      "https://jsdelivr.net",
-      "https://unpkg.com"
-    ], 0);
   </script>
 </body>
 </html>
