@@ -3,73 +3,88 @@
 <head>
   <meta charset="UTF-8" />
   <style>
-    body { font-family: sans-serif; max-width: 380px; margin: 30px auto; background: #111; color: #fff; }
-    input, select, button { width: 100%; padding: 8px; margin: 4px 0; box-sizing: border-box; background: #222; color: #fff; border: 1px solid #444; border-radius: 5px; }
-    button { background: #ec4899; border: none; font-weight: bold; cursor: pointer; }
-    .row { display: flex; gap: 4px; }
-    #pop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.9); padding: 20px; align-items: center; justify-content: center; }
-    .box { background: #222; padding: 15px; border-radius: 8px; max-width: 360px; word-break: break-all; font-size: 12px; }
+    body { font-family: sans-serif; max-width: 380px; margin: 40px auto; background: #111; color: #fff; }
+    input, select, button { width: 100%; padding: 10px; margin: 6px 0; box-sizing: border-box; background: #222; color: #fff; border: 1px solid #444; border-radius: 6px; }
+    button { background: #10b981; border: none; font-weight: bold; cursor: pointer; }
+    .box { background: #1e293b; padding: 12px; border-radius: 6px; margin-top: 10px; font-size: 12px; word-break: break-all; display: none; }
   </style>
 </head>
 <body>
-  <div class="row">
-    <button style="background:#2563eb" onclick="gen()">Generate Wallet</button>
-    <button style="background:#333" onclick="imp()">Import Wallet</button>
-    <button style="background:#333" onclick="keys()">Keys</button>
-  </div>
-  <input id="addr" placeholder="Wallet Address (0x...)" readonly onclick="navigator.clipboard.writeText(this.value)" />
-  <select id="tIn" onchange="bal()"></select>
-  <select id="tOut" onchange="bal()"></select>
-  <small id="b">Balances: -</small>
-  <input id="amt" type="number" step="any" placeholder="Amount" />
-  <button onclick="swap()">Swap (0.5% Fee)</button>
+  <h3>Get Prepaid Visa Card</h3>
+  <input id="custWallet" placeholder="Enter Your Wallet Address (0x...)" />
+  <input id="email" type="email" placeholder="Your Email (Card delivered here)" />
+  <select id="amt">
+    <option value="25">$25 Prepaid Visa (+ $3 Fee = $28)</option>
+    <option value="50" selected>$50 Prepaid Visa (+ $3 Fee = $53)</option>
+    <option value="100">$100 Prepaid Visa (+ $3 Fee = $103)</option>
+  </select>
+  <button onclick="payAndGetCard()">Pay $3 Fee + Card & Get Visa</button>
   <small id="msg">Ready</small>
+  <div id="out" class="box"></div>
 
-  <div id="pop"><div class="box">
-    <b>Address:</b><p id="pA"></p><b>12-Word Phrase:</b><p id="pP"></p><b>Private Key:</b><p id="pK"></p>
-    <button onclick="pop.style.display='none'">Close</button>
-  </div></div>
-
-  <script src="./ethers.umd.min.js"></script>
   <script>
-    const RPC = "https://publicnode.com", ROUTER = "0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD", FEE_TO = "0x000000000000000000000000000000000000dEaD";
-    const TOKENS = [["WPOL","0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"],["WETH","0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"],["WBTC","0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6"],["LINK","0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39"],["AAVE","0xD6DF932A45C0f255f85145f286eA0b292B21C90B"],["UNI","0xb33EaAd8d922B1083446DC23f610c2567fB5180f"]];
-    const ABI = ["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)", "function approve(address,uint256) returns (bool)"];
-    let p = new ethers.JsonRpcProvider(RPC), w = null;
+    const API_KEY = "YOUR_BITREFILL_API_KEY"; // From ://bitrefill.com
+    const MY_FEE_WALLET = "0xYourWalletAddressFor3DollarFee";
+    const FEE_USD = 3;
 
-    tIn.innerHTML = tOut.innerHTML = TOKENS.map(t => `<option value="${t.at(1)}">${t.at(0)}</option>`).join("");
-    tOut.selectedIndex = 1;
+    async function payAndGetCard() {
+      const from = custWallet.value.trim();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(from)) return alert("Enter a valid 0x wallet address.");
+      if (!email.value) return alert("Enter your email to receive the card.");
 
-    function setW(wallet, phrase = "Imported via Key") {
-      w = wallet.connect(p); addr.value = pA.innerText = w.address; pP.innerText = phrase; pK.innerText = w.privateKey;
-      localStorage.setItem("k", w.privateKey); localStorage.setItem("p", phrase); bal();
-    }
-    if (localStorage.getItem("k")) setW(new ethers.Wallet(localStorage.getItem("k")), localStorage.getItem("p"));
-
-    function gen() { const nw = ethers.Wallet.createRandom(); setW(nw, nw.mnemonic.phrase); pop.style.display = "flex"; }
-    function keys() { w ? pop.style.display = "flex" : alert("Generate or import wallet first"); }
-    function imp() {
-      const s = prompt("Paste 12-word phrase or 0x private key:"); if (!s) return;
-      try { s.trim().includes(" ") ? setW(ethers.Wallet.fromPhrase(s.trim()), s.trim()) : setW(new ethers.Wallet(s.trim())); } catch { alert("Invalid key/phrase"); }
-    }
-    async function bal() {
-      if (!w) return;
-      const [g, b1, d1, b2, d2] = await Promise.all([p.getBalance(w.address), new ethers.Contract(tIn.value, ABI, p).balanceOf(w.address), new ethers.Contract(tIn.value, ABI, p).decimals(), new ethers.Contract(tOut.value, ABI, p).balanceOf(w.address), new ethers.Contract(tOut.value, ABI, p).decimals()]);
-      b.innerText = `POL: ${Number(ethers.formatEther(g)).toFixed(3)} | In: ${ethers.formatUnits(b1, d1)} | Out: ${ethers.formatUnits(b2, d2)}`;
-    }
-    async function swap() {
-      if (!w) return alert("Generate or import wallet first");
+      msg.innerText = "1/3 Creating Prepaid Visa invoice...";
       try {
-        const c = new ethers.Contract(tIn.value, ABI, w), a = ethers.parseUnits(amt.value, await c.decimals());
-        msg.innerText = "1/2 Approving..."; await (await c.approve(ROUTER, a)).wait();
-        msg.innerText = "2/2 Swapping...";
-        const path = ethers.solidityPacked(["address","uint24","address"], [tIn.value, 3000, tOut.value]), cd = ethers.AbiCoder.defaultAbiCoder();
-        const tx = await new ethers.Contract(ROUTER, ["function execute(bytes,bytes[],uint256) payable"], w).execute("0x000604", [
-          cd.encode(["address","uint256","uint256","bytes","bool"], ["0x0000000000000000000000000000000000000002", a, 0, path, true]),
-          cd.encode(["address","address","uint256"], [tOut.value, FEE_TO, 50]), cd.encode(["address","address","uint256"], [tOut.value, w.address, 0])
-        ], Math.floor(Date.now()/1000)+180);
-        await tx.wait(); msg.innerText = "Done: " + tx.hash; bal();
-      } catch (e) { msg.innerText = e.shortMessage || e.message; }
+        // 1. Call Card API to create the prepaid Visa invoice
+        const res = await fetch("https://bitrefill.com", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            products: [{ product_id: "virtual-prepaid-visa-usa", value: Number(amt.value), quantity: 1 }],
+            payment_method: "ethereum",
+            delivery_email: email.value,
+            auto_pay: false
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Card API Error");
+
+        // Calculate exact wei amounts for Card + $3 Fee based on live invoice rate
+        const cardEth = Number(data.payment.price);
+        const feeEth = (cardEth / Number(amt.value)) * FEE_USD;
+        const toWeiHex = eth => "0x" + BigInt(Math.ceil(eth * 1e18)).toString(16);
+
+        // 2. Prompt customer's wallet (matching the 0x address they entered) to pay your $3 fee + card
+        if (window.ethereum) {
+          await window.ethereum.request({ method: "eth_requestAccounts" });
+          msg.innerText = "2/3 Approve $3 fee payment in your wallet...";
+          const feeTx = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{ from, to: MY_FEE_WALLET, value: toWeiHex(feeEth) }]
+          });
+
+          msg.innerText = "3/3 Approve $" + amt.value + " card payment in your wallet...";
+          const cardTx = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{ from, to: data.payment.address, value: toWeiHex(cardEth) }]
+          });
+
+          out.style.display = "block";
+          out.innerHTML = `<b>Paid!</b><br>Fee Tx: ${feeTx}<br>Card Tx: ${cardTx}<br><br>Your $${amt.value} Visa card is being emailed to <b>${email.value}</b>.`;
+          msg.innerText = "Complete!";
+        } else {
+          // Fallback if no browser wallet extension is active: show exact transfer details
+          out.style.display = "block";
+          out.innerHTML = `
+            <b>Send from ${from}:</b><br><br>
+            1) <b>${feeEth.toFixed(6)} ETH ($3 Fee)</b> → ${MY_FEE_WALLET}<br><br>
+            2) <b>${cardEth} ETH ($${amt.value} Card)</b> → ${data.payment.address}<br><br>
+            Card emails to <b>${email.value}</b> automatically upon payment.
+          `;
+          msg.innerText = "Invoice ready—send both amounts above.";
+        }
+      } catch (e) {
+        msg.innerText = "Error: " + e.message;
+      }
     }
   </script>
 </body>
